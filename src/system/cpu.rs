@@ -1,4 +1,5 @@
 use rand;   // used for the RND instruction only.
+use super::memory::Memory;
 
 pub struct CPU {
     V: [u8; 16],      // 16 8-bit Vx register
@@ -8,6 +9,7 @@ pub struct CPU {
     PC: u16,          // Program counter
     SP: u8,           // Stack pointer
     stack: [u16; 16], // Internal stack of 16 16-bit values
+    memory: Memory,   // Memory component  
 }
 
 impl CPU {
@@ -20,6 +22,7 @@ impl CPU {
             PC: 0,
             SP: 0,
             stack: [0; 16],
+            memory: Memory::new(),
         };
     }
 
@@ -219,19 +222,29 @@ impl CPU {
                     }
                     0x29 => {
                         // LD F, Vx
-                        panic!("LD F, Vx instruction not implemented, need display sprites")
+                        self.I = self.memory.get_sprite_location(self.V[x as usize]);
                     }
                     0x33 => {
                         // LD B, Vx
-                        panic!("LD B, Vx instruction not implemented, need memory")
+                        let value = self.V[x as usize];
+                        
+                        self.memory.store(self.I, value / 100);
+                        self.memory.store(self.I + 1, (value % 100) / 10);
+                        self.memory.store(self.I + 2, value % 10);
                     }
                     0x55 => {
                         // LD [I], Vx
-                        panic!("LD [I], Vx instruction not implemented, need memory")
+                        for i in 0..x + 1 {
+                            self.memory.store(self.I, self.V[i as usize]);
+                            self.I += 1;
+                        }
                     }
                     0x65 => {
                         // LD Vx, [I]
-                        panic!("LD Vx, [I] instruction not implemented, need memory")
+                        for i in 0..x + 1 {
+                            self.V[i as usize] = self.memory.get(self.I);
+                            self.I += 1;
+                        }
                     }
                     _ => {
                         // invalid instruction
