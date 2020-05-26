@@ -1,5 +1,6 @@
-use rand;   // used for the RND instruction only.
+use super::display::Display;
 use super::memory::Memory;
+use rand; // used for the RND instruction only.
 
 pub struct CPU {
     V: [u8; 16],      // 16 8-bit Vx register
@@ -9,7 +10,8 @@ pub struct CPU {
     PC: u16,          // Program counter
     SP: u8,           // Stack pointer
     stack: [u16; 16], // Internal stack of 16 16-bit values
-    memory: Memory,   // Memory component  
+    memory: Memory,   // Memory component
+    display: Display, // Display component
 }
 
 impl CPU {
@@ -23,7 +25,13 @@ impl CPU {
             SP: 0,
             stack: [0; 16],
             memory: Memory::new(),
+            display: Display::new(64, 32),
         };
+    }
+
+    // FiXME: right now, this must run at the end, because ownership is moved
+    pub fn run_display_application(self) {
+        self.display.run();
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
@@ -52,7 +60,12 @@ impl CPU {
                 match nibbles[2] << 4 | nibbles[3] {
                     0xE0 => {
                         // CLS
-                        panic!("CLS instruction not implemented, need display");
+                        for i in 0..self.display.get_height() {
+                            for j in 0..self.display.get_width() {
+                                self.display.draw_pixel(j, i, false);
+                            }
+                        }
+                        self.display.redraw();
                     }
                     0xEE => {
                         // RET
@@ -191,7 +204,24 @@ impl CPU {
             }
             0xD => {
                 // DRW Vx, Vy, nibble
-                panic!("DRW instruction not implemented, need display");
+                let mut cur_row = self.V[y as usize];
+                let mut cur_col = self.V[x as usize];
+                for _ in 0..nibbles[3] {
+                    let row = self.memory.get(self.I);
+                    self.I += 1;
+
+                    for j in 0..8 {
+                        self.display.draw_pixel(
+                            cur_col as u16,
+                            cur_row as u16,
+                            row & (1 << (8 - 1 - j)) != 0,
+                        );
+                        cur_col += 1;
+                    }
+                    cur_col = self.V[x as usize];
+                    cur_row += 1;
+                }
+                self.display.redraw();
             }
             0xE => {
                 // SKP, SKNP
@@ -227,7 +257,6 @@ impl CPU {
                     0x33 => {
                         // LD B, Vx
                         let value = self.V[x as usize];
-                        
                         self.memory.store(self.I, value / 100);
                         self.memory.store(self.I + 1, (value % 100) / 10);
                         self.memory.store(self.I + 2, value % 10);
