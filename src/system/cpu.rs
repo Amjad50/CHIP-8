@@ -1,6 +1,7 @@
 use super::display::Display;
 use super::memory::Memory;
-use rand; // used for the RND instruction only.
+use rand;
+use std::fs::File; // used for the RND instruction only.
 
 pub struct CPU {
     V: [u8; 16],      // 16 8-bit Vx register
@@ -32,6 +33,10 @@ impl CPU {
     // FiXME: right now, this must run at the end, because ownership is moved
     pub fn run_display_application(self) {
         self.display.run();
+    }
+
+    pub fn read_file(&mut self, file: &mut File) {
+        self.memory.read_file(file);
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {

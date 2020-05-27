@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::{Read};
+
 pub struct Memory {
     memory: [u8; 0x1000], // 4095 byte memory
                           // user programs should only use memory from 0x200
@@ -28,6 +31,10 @@ impl Memory {
         ]);
 
         Memory { memory: mem }
+    }
+
+    pub fn read_file(&mut self, file: &mut File) {
+        file.read(&mut self.memory[0x200..]);
     }
 
     pub fn store(&mut self, addr: u16, value: u8) {
