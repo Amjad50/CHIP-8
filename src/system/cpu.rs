@@ -211,12 +211,23 @@ impl CPU {
                 // DRW Vx, Vy, nibble
                 let mut cur_row = self.V[y as usize];
                 let mut cur_col = self.V[x as usize];
+                let mut collision = false;
                 for _ in 0..nibbles[3] {
                     let row = self.memory.get(self.I);
                     self.I += 1;
 
+                    // wrap around
+                    if cur_row >= (self.display.get_height() as u8) {
+                        cur_row = 0;
+                    }
                     for j in 0..8 {
-                        self.display.draw_pixel(
+                        // wrap around
+                        if cur_col >= (self.display.get_width() as u8) {
+                            cur_col = 0;
+                        }
+
+                        // XOR and check for colliding pixels
+                        collision |= self.display.xor_pixel(
                             cur_col as u16,
                             cur_row as u16,
                             row & (1 << (8 - 1 - j)) != 0,
@@ -227,6 +238,7 @@ impl CPU {
                     cur_row += 1;
                 }
                 self.display.redraw();
+                self.V[0xF] = collision as u8;
             }
             0xE => {
                 // SKP, SKNP

@@ -104,4 +104,15 @@ impl Display {
         assert_eq!(y * self.width + x < self.width * self.height, true);
         self.canvas.borrow_mut().data[(y * self.width + x) as usize] = value;
     }
+
+    pub fn xor_pixel(&mut self, x: u16, y: u16, value: bool) -> bool {
+        assert_eq!(y * self.width + x < self.width * self.height, true);
+        // get a pointer to the value to change
+        let data_ref = &mut self.canvas.borrow_mut().data[(y * self.width + x) as usize];
+        // collide if both are 1, meaning when XORing, the pixel in the screen
+        // will be erased
+        let collision = *data_ref & value;
+        *data_ref ^= value;
+        return collision;
+    }
 }
