@@ -22,7 +22,7 @@ impl CPU {
             I: 0,
             DT: 0,
             ST: 0,
-            PC: 0,
+            PC: 0x200, // start at 0x200 address
             SP: 0,
             stack: [0; 16],
             memory: Memory::new(),
@@ -37,6 +37,31 @@ impl CPU {
 
     pub fn read_file(&mut self, file: &mut File) {
         self.memory.read_file(file);
+    }
+
+    // FIXME: this is running all the instructions before drawing anything
+    // as its using one thread
+    // it stops if it reaches 0x900 address or stuck in infinite loop
+    pub fn start_loop(&mut self) {
+        let mut old_instruction = 0u16;
+        let mut counter = 0;
+        while self.PC < 0x900 {
+            // println!("one go");
+            let instruction =
+                (self.memory.get(self.PC) as u16) << 8 | (self.memory.get(self.PC + 1) as u16);
+            self.run_instruction(instruction);
+            self.PC += 2;
+
+            // check if we are stuck in infinite loop
+            if instruction == old_instruction {
+                counter += 1;
+                if counter == 100 {
+                    break;
+                }
+            } else {
+                old_instruction = instruction;
+            }
+        }
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
@@ -76,23 +101,23 @@ impl CPU {
                         // RET
                         self.SP -= 1;
                         let return_address = self.stack[self.SP as usize];
-                        self.PC = return_address;
+                        self.PC = return_address - 2;
                     }
                     _ => {
                         // SYS addr
-                        self.PC = address;
+                        self.PC = address - 2;
                     }
                 }
             }
             1 => {
                 // JMP addr
-                self.PC = address;
+                self.PC = address - 2;
             }
             2 => {
                 // CALL addr
-                self.stack[self.ST as usize] = self.PC;
-                self.ST += 1;
-                self.PC = address;
+                self.stack[self.SP as usize] = self.PC + 2;
+                self.SP += 1;
+                self.PC = address - 2;
             }
             3 => {
                 // SE Vx, byte
@@ -120,7 +145,7 @@ impl CPU {
             }
             7 => {
                 // ADD Vx, byte
-                self.V[x as usize] += kk;
+                self.V[x as usize] = (self.V[x as usize] as u16 + kk as u16) as u8;
             }
             8 => {
                 // LD, OR, AND, XOR, ADD, SUB, SHR, SUBN, SHL
@@ -157,13 +182,14 @@ impl CPU {
                         } else {
                             0
                         };
-                        self.V[x as usize] -= self.V[y as usize];
+                        self.V[x as usize] =
+                            (self.V[x as usize] as i16 - self.V[y as usize] as i16) as u8;
                     }
                     6 => {
                         // SHR Vx {, Vy}
                         // TODO: not sure if this can have empty y value and what does that mean
                         self.V[0xF] = if self.V[x as usize] & 1 != 0 { 1 } else { 0 };
-                        self.V[x as usize] >>= self.V[y as usize];
+                        self.V[x as usize] >>= 1;
                     }
                     7 => {
                         // SUBN Vx, Vy
@@ -179,7 +205,7 @@ impl CPU {
                         // SHL Vx {, Vy}
                         // TODO: not sure if this can have empty y value and what does that mean
                         self.V[0xF] = if self.V[x as usize] & 0x80 != 0 { 1 } else { 0 };
-                        self.V[x as usize] <<= self.V[y as usize];
+                        self.V[x as usize] <<= 1;
                     }
                     _ => {
                         // invalid instruction
@@ -200,7 +226,7 @@ impl CPU {
             }
             0xB => {
                 // JP V0, addr
-                self.PC = address + self.V[0] as u16;
+                self.PC = address + self.V[0] as u16 - 2;
             }
             0xC => {
                 // RND Vx, byte
