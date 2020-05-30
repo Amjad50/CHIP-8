@@ -65,10 +65,10 @@ impl CPU {
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
-        // nipples will have the values of the instruction as
+        // nibbles will have the values of the instruction as
         // each four bytes of the instruction starting from the left as 0
         //
-        // example: instruction = 0xfa12, nipples = [0xf, 0xa, 0x1, 0x2]
+        // example: instruction = 0xfa12, nibbles = [0xf, 0xa, 0x1, 0x2]
         let mut nibbles = [0u8; 4];
         for i in 0..4 {
             let offset = (3 - i) * 4;
