@@ -234,9 +234,8 @@ impl CPU {
                 let mut cur_row = self.V[y as usize];
                 let mut cur_col = self.V[x as usize];
                 let mut collision = false;
-                for _ in 0..nibbles[3] {
-                    let row = self.memory.borrow().get(self.I);
-                    self.I += 1;
+                for i in 0..nibbles[3] {
+                    let row = self.memory.borrow().get(self.I + i as u16);
 
                     // wrap around
                     if cur_row >= (self.display.get_height() as u8) {
