@@ -5,12 +5,12 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 const APPLICATION_ID: Option<&str> = Some("com.amjad.chip-8");
+pub static mut APPLICATION: Option<Application> = None;
 const DISPLAY_TITLE: &str = "CHIP-8";
 pub const DEFAULT_PIXEL_SIZE: u16 = 10;
 
 pub struct Display {
-    application: Application,
-    window: Window,
+    window: Rc<RefCell<Window>>,
     area: DrawingArea,
     width: u16,
     height: u16,
@@ -35,7 +35,7 @@ impl Display {
             println!("Failed to initialize GTK.");
         }
 
-        let application = Application::new(APPLICATION_ID, Default::default())
+        let _application = Application::new(APPLICATION_ID, Default::default())
             .expect("failed to initialize GTK application");
 
         let area = DrawingArea::new();
@@ -48,15 +48,24 @@ impl Display {
         );
 
         let display = Display {
-            application: application,
-            window: window,
+            window: Rc::new(RefCell::new(window)),
             area: area,
             width: width,
             height: height,
             data: Rc::new(RefCell::new(vec![false; (width * height) as usize])),
         };
 
+        let c_window = display.window.clone();
+
+        _application.connect_activate(move |app: &Application| {
+            let window = &*c_window.borrow();
+            app.add_window(window);
+        });
         display.setup_drawing();
+
+        unsafe {
+            APPLICATION = Some(_application);
+        }
 
         display
     }
@@ -91,16 +100,36 @@ impl Display {
     }
 
     pub fn redraw(&self) {
-        self.window
-            .queue_draw_area(0, 0, self.window.get_allocated_width(), self.window.get_allocated_height());
+        let window = self.window.borrow();
+        window.queue_draw_area(
+            0,
+            0,
+            window.get_allocated_width(),
+            window.get_allocated_height(),
+        );
     }
 
-    pub fn run(self) {
-        let window = self.window;
-        self.application.connect_activate(move |app: &Application| {
-            app.add_window(&window);
+    pub fn run_in_loop<F: 'static>(&self, interval: u32, func: F)
+    where
+        F: Fn() -> (),
+    {
+        timeout_add(interval, move || {
+            func();
+            Continue(true)
         });
-        self.application.run(&[]);
+    }
+
+    pub fn run_application() {
+        unsafe {
+            match &APPLICATION {
+                Some(app) => {
+                    app.run(&[]);
+                },
+                None => {
+                    // if there is no application, don't run
+                },
+            }
+        }
     }
 
     pub fn get_height(&self) -> u16 {

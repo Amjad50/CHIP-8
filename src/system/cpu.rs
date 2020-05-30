@@ -1,18 +1,20 @@
 use super::display::Display;
 use super::memory::Memory;
 use rand;
-use std::fs::File; // used for the RND instruction only.
+use std::cell::RefCell;
+use std::fs::File;
+use std::rc::Rc; // used for the RND instruction only.
 
 pub struct CPU {
-    V: [u8; 16],      // 16 8-bit Vx register
-    I: u16,           // I register
-    DT: u8,           // Delay timer
-    ST: u8,           // Sound timer
-    PC: u16,          // Program counter
-    SP: u8,           // Stack pointer
-    stack: [u16; 16], // Internal stack of 16 16-bit values
-    memory: Memory,   // Memory component
-    display: Display, // Display component
+    V: [u8; 16],             // 16 8-bit Vx register
+    I: u16,                  // I register
+    DT: u8,                  // Delay timer
+    ST: u8,                  // Sound timer
+    PC: u16,                 // Program counter
+    SP: u8,                  // Stack pointer
+    stack: [u16; 16],        // Internal stack of 16 16-bit values
+    memory: RefCell<Memory>, // Memory component
+    display: Display,        // Display component
 }
 
 impl CPU {
@@ -25,43 +27,37 @@ impl CPU {
             PC: 0x200, // start at 0x200 address
             SP: 0,
             stack: [0; 16],
-            memory: Memory::new(),
+            memory: RefCell::new(Memory::new()),
             display: Display::new(64, 32),
         };
     }
 
-    // FiXME: right now, this must run at the end, because ownership is moved
     pub fn run_display_application(self) {
-        self.display.run();
+        let cpu_rc = Rc::new(RefCell::new(self));
+        let c_cpu = cpu_rc.clone();
+
+        cpu_rc.borrow().display.run_in_loop(1000 / 60, move || {
+            let mut cpu = c_cpu.borrow_mut();
+            let instruction = (cpu.memory.borrow().get(cpu.PC) as u16) << 8
+                | (cpu.memory.borrow().get(cpu.PC + 1) as u16);
+            cpu.run_instruction(instruction);
+            cpu.PC += 2;
+
+            if cpu.ST > 0 {
+                cpu.ST -= 1;
+            }
+
+            if cpu.DT > 0 {
+                cpu.DT -= 1;
+            }
+        });
+
+        // run the application
+        Display::run_application();
     }
 
     pub fn read_file(&mut self, file: &mut File) {
-        self.memory.read_file(file);
-    }
-
-    // FIXME: this is running all the instructions before drawing anything
-    // as its using one thread
-    // it stops if it reaches 0x900 address or stuck in infinite loop
-    pub fn start_loop(&mut self) {
-        let mut old_instruction = 0u16;
-        let mut counter = 0;
-        while self.PC < 0x900 {
-            // println!("one go");
-            let instruction =
-                (self.memory.get(self.PC) as u16) << 8 | (self.memory.get(self.PC + 1) as u16);
-            self.run_instruction(instruction);
-            self.PC += 2;
-
-            // check if we are stuck in infinite loop
-            if instruction == old_instruction {
-                counter += 1;
-                if counter == 100 {
-                    break;
-                }
-            } else {
-                old_instruction = instruction;
-            }
-        }
+        self.memory.borrow_mut().read_file(file);
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
@@ -239,7 +235,7 @@ impl CPU {
                 let mut cur_col = self.V[x as usize];
                 let mut collision = false;
                 for _ in 0..nibbles[3] {
-                    let row = self.memory.get(self.I);
+                    let row = self.memory.borrow().get(self.I);
                     self.I += 1;
 
                     // wrap around
@@ -295,26 +291,27 @@ impl CPU {
                     }
                     0x29 => {
                         // LD F, Vx
-                        self.I = self.memory.get_sprite_location(self.V[x as usize]);
+                        self.I = self.memory.borrow().get_sprite_location(self.V[x as usize]);
                     }
                     0x33 => {
                         // LD B, Vx
                         let value = self.V[x as usize];
-                        self.memory.store(self.I, value / 100);
-                        self.memory.store(self.I + 1, (value % 100) / 10);
-                        self.memory.store(self.I + 2, value % 10);
+                        let mut memory = self.memory.borrow_mut();
+                        memory.store(self.I, value / 100);
+                        memory.store(self.I + 1, (value % 100) / 10);
+                        memory.store(self.I + 2, value % 10);
                     }
                     0x55 => {
                         // LD [I], Vx
                         for i in 0..x + 1 {
-                            self.memory.store(self.I, self.V[i as usize]);
+                            self.memory.borrow_mut().store(self.I, self.V[i as usize]);
                             self.I += 1;
                         }
                     }
                     0x65 => {
                         // LD Vx, [I]
                         for i in 0..x + 1 {
-                            self.V[i as usize] = self.memory.get(self.I);
+                            self.V[i as usize] = self.memory.borrow().get(self.I);
                             self.I += 1;
                         }
                     }
