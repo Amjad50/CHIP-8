@@ -4,8 +4,6 @@ use gtk::{Application, DrawingArea, Window, WindowType};
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use super::canvas::Canvas;
-
 const APPLICATION_ID: Option<&str> = Some("com.amjad.chip-8");
 const DISPLAY_TITLE: &str = "CHIP-8";
 pub const DEFAULT_PIXEL_SIZE: u16 = 10;
@@ -13,11 +11,10 @@ pub const DEFAULT_PIXEL_SIZE: u16 = 10;
 pub struct Display {
     application: Application,
     window: Window,
-    canvas: Rc<RefCell<Canvas>>,
+    area: DrawingArea,
     width: u16,
     height: u16,
-    pixelWidth: i32,
-    pixelHeight: i32,
+    data: Rc<RefCell<Vec<bool>>>,
 }
 
 impl Display {
@@ -50,38 +47,52 @@ impl Display {
             &area,
         );
 
-        let canvas = Canvas::new(vec![false; (width * height) as usize], area, width, height);
-
-        let canvas = Display::connect_canvas(canvas);
-        let c_canvas = canvas.clone();
-
         let display = Display {
             application: application,
             window: window,
-            canvas: c_canvas,
+            area: area,
             width: width,
             height: height,
-            pixelWidth: (width * DEFAULT_PIXEL_SIZE) as i32,
-            pixelHeight: (height * DEFAULT_PIXEL_SIZE) as i32,
+            data: Rc::new(RefCell::new(vec![false; (width * height) as usize])),
         };
+
+        display.setup_drawing();
 
         display
     }
 
-    fn connect_canvas(canvas: Canvas) -> Rc<RefCell<Canvas>> {
-        let area = canvas.area.clone();
-        let canvas = Rc::new(RefCell::new(canvas));
-        let c_canvas = canvas.clone();
-        area.connect_draw(move |_, cr| {
-            c_canvas.borrow().draw(&cr);
+    fn setup_drawing(&self) {
+        let height = self.height;
+        let width = self.width;
+        let c_data = self.data.clone();
+        self.area.connect_draw(move |_, cr| {
+            for i in 0..height {
+                for j in 0..width {
+                    // black if true, white if false
+                    let color = if c_data.borrow()[(i * width + j) as usize] {
+                        0.
+                    } else {
+                        1.
+                    };
+                    // if its 0, it will result in #000(white)
+                    // if its 1, it will result in #fff(black)
+                    cr.set_source_rgb(color, color, color);
+                    cr.rectangle(
+                        (j * DEFAULT_PIXEL_SIZE) as f64,
+                        (i * DEFAULT_PIXEL_SIZE) as f64,
+                        DEFAULT_PIXEL_SIZE as f64,
+                        DEFAULT_PIXEL_SIZE as f64,
+                    );
+                    cr.fill();
+                }
+            }
             Inhibit(false)
         });
-        canvas
     }
 
     pub fn redraw(&self) {
         self.window
-            .queue_draw_area(0, 0, self.pixelWidth, self.pixelHeight);
+            .queue_draw_area(0, 0, self.window.get_allocated_width(), self.window.get_allocated_height());
     }
 
     pub fn run(self) {
@@ -102,13 +113,13 @@ impl Display {
 
     pub fn draw_pixel(&mut self, x: u16, y: u16, value: bool) {
         assert_eq!(y * self.width + x < self.width * self.height, true);
-        self.canvas.borrow_mut().data[(y * self.width + x) as usize] = value;
+        self.data.borrow_mut()[(y * self.width + x) as usize] = value;
     }
 
     pub fn xor_pixel(&mut self, x: u16, y: u16, value: bool) -> bool {
         assert_eq!(y * self.width + x < self.width * self.height, true);
         // get a pointer to the value to change
-        let data_ref = &mut self.canvas.borrow_mut().data[(y * self.width + x) as usize];
+        let data_ref = &mut self.data.borrow_mut()[(y * self.width + x) as usize];
         // collide if both are 1, meaning when XORing, the pixel in the screen
         // will be erased
         let collision = *data_ref & value;
