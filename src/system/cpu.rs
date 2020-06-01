@@ -1,9 +1,10 @@
 use super::display::Display;
 use super::memory::Memory;
-use rand;
+use rand; // used for the RND instruction only.
 use std::cell::RefCell;
 use std::fs::File;
-use std::rc::Rc; // used for the RND instruction only.
+use std::rc::Rc;
+use std::time::{Duration, SystemTime};
 
 pub struct CPU {
     V: [u8; 16],             // 16 8-bit Vx register
@@ -17,6 +18,7 @@ pub struct CPU {
     display: Display,        // Display component
 
     wait_for_keypress_x: i8, // used to indicate the waiting for keypress for instruction Fx0A - LD Vx, K
+    last_update: SystemTime,
 }
 
 impl CPU {
@@ -32,6 +34,7 @@ impl CPU {
             memory: RefCell::new(Memory::new()),
             display: Display::new(64, 32),
             wait_for_keypress_x: -1,
+            last_update: SystemTime::now(),
         };
         cpu.setup_keyboard();
         cpu
@@ -71,12 +74,23 @@ impl CPU {
             cpu.run_instruction(instruction);
             cpu.PC += 2;
 
-            if cpu.ST > 0 {
-                cpu.ST -= 1;
-            }
+            match cpu.last_update.elapsed() {
+                Ok(duration) => {
+                    if duration > Duration::from_millis(1000 / 60) {
+                        if cpu.ST > 0 {
+                            cpu.ST -= 1;
+                        }
 
-            if cpu.DT > 0 {
-                cpu.DT -= 1;
+                        if cpu.DT > 0 {
+                            cpu.DT -= 1;
+                        }
+
+                        cpu.last_update = SystemTime::now();
+                    }
+                }
+                Err(e) => {
+                    println!("Error occurred in SystemTime::elapsed {}", e);
+                }
             }
         });
 
