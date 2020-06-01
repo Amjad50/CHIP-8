@@ -1,40 +1,21 @@
 mod system;
+use std::env;
+use std::fs::File;
 use system::cpu::CPU;
 
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    // mostly redundant
+    assert_eq!(args.len() > 0, true);
+
+    if args.len() < 2 {
+        println!("USAGE: {} <rom-file>", args[0]);
+        return;
+    }
+
     let mut cpu = CPU::new();
-    // CLS
-    cpu.run_instruction(0x00E0);
+    cpu.read_file(&mut File::open(&args[1]).unwrap());
 
-    // LD VB, 0x05
-    cpu.run_instruction(0x6B05);
-    // LD VC, 0x05
-    cpu.run_instruction(0x6C05);
-
-    // LD VA, 0x0A
-    cpu.run_instruction(0x6A0A);
-    cpu.run_instruction(0xFA29);
-    // ADD VB, 6
-    cpu.run_instruction(0x7B06);
-    // DRW VB, VC
-    cpu.run_instruction(0xDBC5);
-
-    // LD VA, 0x0B
-    cpu.run_instruction(0x6A0B);
-    cpu.run_instruction(0xFA29);
-    // ADD VB, 6
-    cpu.run_instruction(0x7B06);
-    // DRW VB, VC
-    cpu.run_instruction(0xDBC5);
-
-    // LD VA, 0x0C
-    cpu.run_instruction(0x6A0C);
-    cpu.run_instruction(0xFA29);
-    // ADD VB, 6
-    cpu.run_instruction(0x7B06);
-    // DRW VB, VC
-    cpu.run_instruction(0xDBC5);
-
-    // must run at the end
     cpu.run_display_application();
 }

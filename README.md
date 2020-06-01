@@ -65,9 +65,6 @@ Some games and roms tried with this emulator
 ![Keypad Tester](screenshots/keypad.png)
 
 
-#### TODO:
-- make the user able to specify rom as argument.
-
 Any suggestions and edits are welcomed in the issues and pull requests.
 
 [chip8-wiki]: https://en.wikipedia.org/wiki/CHIP-8
