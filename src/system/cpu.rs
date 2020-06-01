@@ -3,6 +3,7 @@ use super::memory::Memory;
 use rand; // used for the RND instruction only.
 use std::cell::RefCell;
 use std::fs::File;
+use ears::{AudioController, Sound};
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
@@ -16,6 +17,7 @@ pub struct CPU {
     stack: [u16; 16],        // Internal stack of 16 16-bit values
     memory: RefCell<Memory>, // Memory component
     display: Display,        // Display component
+    beep_sound: Sound,
 
     wait_for_keypress_x: i8, // used to indicate the waiting for keypress for instruction Fx0A - LD Vx, K
     last_update: SystemTime,
@@ -23,6 +25,8 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> CPU {
+        let sound = ears::Sound::new("./beep.wav").unwrap();
+
         let cpu = CPU {
             V: [0u8; 16],
             I: 0,
@@ -35,6 +39,7 @@ impl CPU {
             display: Display::new(64, 32),
             wait_for_keypress_x: -1,
             last_update: SystemTime::now(),
+            beep_sound: sound,
         };
         cpu.setup_keyboard();
         cpu
@@ -48,7 +53,7 @@ impl CPU {
         let cpu_rc = Rc::new(RefCell::new(self));
         let c_cpu = cpu_rc.clone();
 
-        const FPS: u32 = 300;
+        const FPS: u32 = 1000;
 
         cpu_rc.borrow().display.run_in_loop(1000 / FPS, move || {
             let mut cpu = c_cpu.borrow_mut();
@@ -79,6 +84,7 @@ impl CPU {
                     if duration > Duration::from_millis(1000 / 60) {
                         if cpu.ST > 0 {
                             cpu.ST -= 1;
+                            cpu.play_beep();
                         }
 
                         if cpu.DT > 0 {
@@ -100,6 +106,10 @@ impl CPU {
 
     pub fn read_file(&mut self, file: &mut File) {
         self.memory.borrow_mut().read_file(file);
+    }
+
+    pub fn play_beep(&mut self) {
+        self.beep_sound.play();
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
