@@ -1,7 +1,9 @@
+use gdk::enums::key;
+use gdk::keyval_to_upper;
 use gio::prelude::*;
 use gtk::prelude::*;
 use gtk::{Application, DrawingArea, Window, WindowType};
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 const APPLICATION_ID: Option<&str> = Some("com.amjad.chip-8");
@@ -9,12 +11,32 @@ pub static mut APPLICATION: Option<Application> = None;
 const DISPLAY_TITLE: &str = "CHIP-8";
 pub const DEFAULT_PIXEL_SIZE: u16 = 10;
 
+const KEYBOARD_MAPPING: [u32; 16] = [
+    key::X,
+    key::_1,
+    key::_2,
+    key::_3,
+    key::Q,
+    key::W,
+    key::E,
+    key::A,
+    key::S,
+    key::D,
+    key::Z,
+    key::C,
+    key::_4,
+    key::R,
+    key::F,
+    key::V,
+];
+
 pub struct Display {
     window: Rc<RefCell<Window>>,
     area: DrawingArea,
     width: u16,
     height: u16,
     data: Rc<RefCell<Vec<bool>>>,
+    keyboard: Rc<RefCell<[bool; 16]>>,
 }
 
 impl Display {
@@ -53,6 +75,7 @@ impl Display {
             width: width,
             height: height,
             data: Rc::new(RefCell::new(vec![false; (width * height) as usize])),
+            keyboard: Rc::new(RefCell::new([false; 16])),
         };
 
         let c_window = display.window.clone();
@@ -109,6 +132,37 @@ impl Display {
         );
     }
 
+    pub fn setup_keyboard(&self) {
+        let window = self.window.borrow();
+        let keyboard_clone_press = self.keyboard.clone();
+        let keyboard_clone_release = self.keyboard.clone();
+
+        // FIXME: full code duplication with below
+        window.connect_key_press_event(move |_, event| {
+            let mut keyboard = keyboard_clone_press.borrow_mut();
+            let keyval = keyval_to_upper(event.get_keyval());
+            match KEYBOARD_MAPPING.iter().position(|&x| x == keyval) {
+                Some(index) => {
+                    keyboard[index] = true;
+                }
+                None => {}
+            };
+            Inhibit(false)
+        });
+
+        window.connect_key_release_event(move |_, event| {
+            let mut keyboard = keyboard_clone_release.borrow_mut();
+            let keyval = keyval_to_upper(event.get_keyval());
+            match KEYBOARD_MAPPING.iter().position(|&x| x == keyval) {
+                Some(index) => {
+                    keyboard[index] = false;
+                }
+                None => {}
+            };
+            Inhibit(false)
+        });
+    }
+
     pub fn run_in_loop<F: 'static>(&self, interval: u32, func: F)
     where
         F: Fn() -> (),
@@ -124,10 +178,10 @@ impl Display {
             match &APPLICATION {
                 Some(app) => {
                     app.run(&[]);
-                },
+                }
                 None => {
                     // if there is no application, don't run
-                },
+                }
             }
         }
     }
@@ -138,6 +192,18 @@ impl Display {
 
     pub fn get_width(&self) -> u16 {
         self.width
+    }
+
+    pub fn get_keyboard_data(&self) -> Ref<[bool; 16]> {
+        self.keyboard.borrow()
+    }
+
+    pub fn get_keyboard_data_copy(&self) -> [bool; 16] {
+        let mut x = [false; 16];
+        for (i, &xx) in self.keyboard.borrow().iter().enumerate() {
+            x[i] = xx;
+        }
+        x
     }
 
     pub fn draw_pixel(&mut self, x: u16, y: u16, value: bool) {

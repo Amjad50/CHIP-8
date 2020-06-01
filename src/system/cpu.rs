@@ -15,11 +15,13 @@ pub struct CPU {
     stack: [u16; 16],        // Internal stack of 16 16-bit values
     memory: RefCell<Memory>, // Memory component
     display: Display,        // Display component
+
+    wait_for_keypress_x: i8, // used to indicate the waiting for keypress for instruction Fx0A - LD Vx, K
 }
 
 impl CPU {
     pub fn new() -> CPU {
-        return CPU {
+        let cpu = CPU {
             V: [0u8; 16],
             I: 0,
             DT: 0,
@@ -29,15 +31,41 @@ impl CPU {
             stack: [0; 16],
             memory: RefCell::new(Memory::new()),
             display: Display::new(64, 32),
+            wait_for_keypress_x: -1,
         };
+        cpu.setup_keyboard();
+        cpu
+    }
+
+    pub fn setup_keyboard(&self) {
+        self.display.setup_keyboard();
     }
 
     pub fn run_display_application(self) {
         let cpu_rc = Rc::new(RefCell::new(self));
         let c_cpu = cpu_rc.clone();
 
-        cpu_rc.borrow().display.run_in_loop(1000 / 60, move || {
+        const FPS: u32 = 300;
+
+        cpu_rc.borrow().display.run_in_loop(1000 / FPS, move || {
             let mut cpu = c_cpu.borrow_mut();
+
+            // cpu waiting for key press
+            if cpu.wait_for_keypress_x > -1 {
+                // get the keyboard press layout
+                let keyboard = cpu.display.get_keyboard_data_copy();
+                // if any key is being pressed, wait no more and assign
+                // the value of they key to the register Vx
+                match keyboard.iter().position(|&x| x) {
+                    Some(key) => {
+                        let x = cpu.wait_for_keypress_x as usize;
+                        cpu.V[x] = key as u8;
+                        cpu.wait_for_keypress_x = -1;
+                    }
+                    None => {}
+                };
+            }
+
             let instruction = (cpu.memory.borrow().get(cpu.PC) as u16) << 8
                 | (cpu.memory.borrow().get(cpu.PC + 1) as u16);
             cpu.run_instruction(instruction);
@@ -263,7 +291,21 @@ impl CPU {
             }
             0xE => {
                 // SKP, SKNP
-                panic!("SKP, SKNP instruction not implemented, need keyboard");
+                match nibbles[2] << 4 | nibbles[3] {
+                    0x9E => {
+                        // SKP Vx
+                        if self.display.get_keyboard_data()[self.V[x as usize] as usize] {
+                            self.PC += 2;
+                        }
+                    }
+                    0xA1 => {
+                        // SKNP Vx
+                        if !self.display.get_keyboard_data()[self.V[x as usize] as usize] {
+                            self.PC += 2;
+                        }
+                    }
+                    _ => {}
+                }
             }
             0xF => {
                 // LD, ADD
@@ -274,7 +316,7 @@ impl CPU {
                     }
                     0x0A => {
                         // LD Vx, K
-                        panic!("LD Vx, K instruction not implemented, need keyboard");
+                        self.wait_for_keypress_x = x as i8;
                     }
                     0x15 => {
                         // LD DT, Vx
