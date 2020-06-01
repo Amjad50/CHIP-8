@@ -34,7 +34,7 @@ impl Memory {
     }
 
     pub fn read_file(&mut self, file: &mut File) {
-        file.read(&mut self.memory[0x200..]);
+        file.read(&mut self.memory[0x200..]).unwrap();
     }
 
     pub fn store(&mut self, addr: u16, value: u8) {
