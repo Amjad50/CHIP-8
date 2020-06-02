@@ -7,8 +7,21 @@ This is built using [rust][rust-site], and [gtk][gtk-site] for gui.
 ### Components
 This emulator is full as the documentation, and that include:
 - 32x64 screen
-- Sounds [beep.wav](beep.wav)
 - Keyboard support
+- Sounds
+
+#### CPU
+
+The main part is the CPU and its where users interface with the emulator,
+users can run *roms* by making the CPU read the file containing the
+*rom* data:
+
+``` rust
+let mut cpu = CPU::new();
+cpu.read_file(&mut File::open("/path/to/rom.ch8").unwrap());
+
+cpu.run_display_application();
+```
 
 #### Keyboard
 Chip-8's has 16 keys in its keypad as shown:
@@ -28,18 +41,8 @@ This emulator uses the left side of the keyboard as a keypad as shown:
 | A | S | D | F |
 | Z | X | C | V |
 
-#### CPU
-
-The main part is the CPU and its where users interface with the emulator,
-users can run *roms* by making the CPU read the file containing the
-*rom* data:
-
-``` rust
-let mut cpu = CPU::new();
-cpu.read_file(&mut File::open("/path/to/rom.ch8").unwrap());
-
-cpu.run_display_application();
-```
+#### Sound
+I used a sin wave sound signal of `300Hz` frequency. 
 
 ### Screenshots
 Some games and roms tried with this emulator

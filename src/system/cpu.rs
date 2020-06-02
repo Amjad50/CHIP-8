@@ -1,9 +1,9 @@
 use super::display::Display;
 use super::memory::Memory;
+use super::sound::Sound;
 use rand; // used for the RND instruction only.
 use std::cell::RefCell;
 use std::fs::File;
-use ears::{AudioController, Sound};
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
@@ -25,8 +25,6 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> CPU {
-        let sound = ears::Sound::new("./beep.wav").unwrap();
-
         let cpu = CPU {
             V: [0u8; 16],
             I: 0,
@@ -39,7 +37,7 @@ impl CPU {
             display: Display::new(64, 32),
             wait_for_keypress_x: -1,
             last_update: SystemTime::now(),
-            beep_sound: sound,
+            beep_sound: Sound::new(300),    // frequency of the sin wave
         };
         cpu.setup_keyboard();
         cpu
@@ -84,7 +82,10 @@ impl CPU {
                     if duration > Duration::from_millis(1000 / 60) {
                         if cpu.ST > 0 {
                             cpu.ST -= 1;
+
                             cpu.play_beep();
+                        } else {
+                            cpu.stop_beep();
                         }
 
                         if cpu.DT > 0 {
@@ -109,7 +110,15 @@ impl CPU {
     }
 
     pub fn play_beep(&mut self) {
-        self.beep_sound.play();
+        if self.beep_sound.is_paused() {
+            self.beep_sound.play();
+        }
+    }
+
+    pub fn stop_beep(&mut self) {
+        if !self.beep_sound.is_paused() {
+            self.beep_sound.stop();
+        }
     }
 
     pub fn run_instruction(&mut self, instruction: u16) {
