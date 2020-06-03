@@ -2,13 +2,12 @@ use gdk::enums::key;
 use gdk::keyval_to_upper;
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{Application, DrawingArea, Window, WindowType};
+use gtk::{Application, Builder, DrawingArea, ListStore, TextBuffer, Window};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 const APPLICATION_ID: Option<&str> = Some("com.amjad.chip-8");
 pub static mut APPLICATION: Option<Application> = None;
-const DISPLAY_TITLE: &str = "CHIP-8";
 pub const DEFAULT_PIXEL_SIZE: u16 = 10;
 
 const KEYBOARD_MAPPING: [u32; 16] = [
@@ -33,6 +32,9 @@ const KEYBOARD_MAPPING: [u32; 16] = [
 pub struct Display {
     window: Rc<RefCell<Window>>,
     area: DrawingArea,
+    registers_buffer: TextBuffer,
+    stack_buffer: TextBuffer,
+    memory_list_store: ListStore,
     width: u16,
     height: u16,
     data: Rc<RefCell<Vec<bool>>>,
@@ -40,16 +42,31 @@ pub struct Display {
 }
 
 impl Display {
-    fn create_root_window(width: i32, height: i32, area: &DrawingArea) -> Window {
-        let window = Window::new(WindowType::Toplevel);
-        window.set_title(DISPLAY_TITLE);
-        window.set_default_size(width, height);
-        window.set_resizable(false);
+    fn build_layout(
+        width: i32,
+        height: i32,
+    ) -> (Window, DrawingArea, TextBuffer, TextBuffer, ListStore) {
+        let glade_src = include_str!("../../layout.glade");
 
-        window.add(area);
+        let builder = Builder::new_from_string(glade_src);
+        let window: Window = builder.get_object("main_application_window").unwrap();
+        let area: DrawingArea = builder.get_object("canvas").unwrap();
+
+        let registers_buffer: gtk::TextBuffer = builder.get_object("registersBuffer").unwrap();
+        let stack_buffer: gtk::TextBuffer = builder.get_object("stackBuffer").unwrap();
+        let memory_list_store: gtk::ListStore = builder.get_object("memoryViewListStore").unwrap();
+
+        area.set_size_request(width, height);
 
         window.show_all();
-        window
+
+        (
+            window,
+            area,
+            registers_buffer,
+            stack_buffer,
+            memory_list_store,
+        )
     }
 
     pub fn new(width: u16, height: u16) -> Display {
@@ -60,18 +77,19 @@ impl Display {
         let _application = Application::new(APPLICATION_ID, Default::default())
             .expect("failed to initialize GTK application");
 
-        let area = DrawingArea::new();
-
         // will be added to application before run
-        let window = Display::create_root_window(
-            (width * DEFAULT_PIXEL_SIZE) as i32,
-            (height * DEFAULT_PIXEL_SIZE) as i32,
-            &area,
-        );
+        let (window, area, registers_buffer, stack_buffer, memory_list_store) =
+            Display::build_layout(
+                (width * DEFAULT_PIXEL_SIZE) as i32,
+                (height * DEFAULT_PIXEL_SIZE) as i32,
+            );
 
         let display = Display {
             window: Rc::new(RefCell::new(window)),
             area: area,
+            registers_buffer: registers_buffer,
+            stack_buffer: stack_buffer,
+            memory_list_store: memory_list_store,
             width: width,
             height: height,
             data: Rc::new(RefCell::new(vec![false; (width * height) as usize])),
@@ -120,6 +138,101 @@ impl Display {
             }
             Inhibit(false)
         });
+    }
+
+    pub fn update_stack_debug(&self, stack: &[u16]) {
+        let result = stack
+            .iter() // iterater over the stack
+            .rev() // in the reverse order
+            .map(|x| format!("{:04x}", x)) // convert it to a string representation
+            .collect::<Vec<String>>()
+            .join("\n"); // join by newline
+
+        self.stack_buffer.set_text(&result);
+        self.stack_buffer.set_modified(true)
+    }
+
+    pub fn update_registers_debug(&self, V: &[u8; 16], I: u16, PC: u16, DT: u8, ST: u8, SP: u8) {
+        let mut result: String = "".to_owned();
+        // V registers
+        for i in 0..V.len() {
+            result.push_str(&format!("V{:1x}: {:02x}    ", i, V[i]));
+            if i % 4 == 3 {
+                result.push('\n');
+            }
+        }
+        result.push('\n');
+
+        // I
+        result.push_str(&format!("I: {:04x}\n\n", I));
+
+        // PC
+        result.push_str(&format!("PC: {:04x}\n\n", PC));
+
+        // DT, ST
+        result.push_str(&format!("DT: {:02x}\n", DT));
+        result.push_str(&format!("ST: {:02x}\n\n", ST));
+
+        // SP
+        result.push_str(&format!("SP: {:02x}", SP));
+
+        self.registers_buffer.set_text(&result);
+        self.registers_buffer.set_modified(true);
+    }
+
+    fn get_hex_string(bytes: &[u8]) -> String {
+        let mut result: String = "".to_owned();
+
+        for byte in bytes {
+            result.push_str(&format!("{:02x} ", byte));
+        }
+
+        result
+    }
+
+    fn get_ascii_string(bytes: &[u8]) -> String {
+        let mut result: String = "".to_owned();
+
+        for &byte in bytes {
+            let c = byte as char;
+            if c.is_ascii() && !c.is_control() {
+                result.push(c);
+            } else {
+                result.push_str(". "); //
+            }
+        }
+
+        result
+    }
+
+    pub fn update_memory_debug(&self, memory: &[u8], first_time: bool) {
+        if first_time {
+            self.memory_list_store.clear();
+        }
+
+        let mut current_item = if first_time {
+            self.memory_list_store.append()
+        } else {
+            self.memory_list_store.get_iter_first().unwrap()
+        };
+
+        for i in (0..memory.len()).step_by(16) {
+            let address = format!("{:04x}", i);
+            let hex = Display::get_hex_string(&memory[i..i + 16]);
+            let ascii = Display::get_ascii_string(&memory[i..i + 16]);
+
+            self.memory_list_store
+                .set(&current_item, &[0, 1, 2], &[&address, &hex, &ascii]);
+
+            // prepare for the next loop
+            if first_time {
+                current_item = self.memory_list_store.append();
+            } else {
+                // in the next loop, this should set current_item to invalid
+                // but should not be used
+                self.memory_list_store.iter_next(&current_item);
+            }
+        }
     }
 
     pub fn redraw(&self) {

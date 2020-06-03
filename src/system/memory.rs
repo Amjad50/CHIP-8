@@ -47,6 +47,10 @@ impl Memory {
         self.memory[addr as usize]
     }
 
+    pub fn get_memory(&self) -> &[u8] {
+        &self.memory
+    }
+
     pub fn get_sprite_location(&self, value: u8) -> u16 {
         assert_eq!(value <= 0xF, true);
         value as u16 * 5

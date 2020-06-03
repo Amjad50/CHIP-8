@@ -37,9 +37,12 @@ impl CPU {
             display: Display::new(64, 32),
             wait_for_keypress_x: -1,
             last_update: SystemTime::now(),
-            beep_sound: Sound::new(300),    // frequency of the sin wave
+            beep_sound: Sound::new(300), // frequency of the sin wave
         };
         cpu.setup_keyboard();
+        cpu.display
+            .update_memory_debug(cpu.memory.borrow().get_memory(), true);
+
         cpu
     }
 
@@ -70,7 +73,7 @@ impl CPU {
                     }
                     None => {}
                 };
-                
+
                 return;
             }
 
@@ -78,6 +81,9 @@ impl CPU {
                 | (cpu.memory.borrow().get(cpu.PC + 1) as u16);
             cpu.run_instruction(instruction);
             cpu.PC += 2;
+
+            cpu.display
+                .update_registers_debug(&cpu.V, cpu.I, cpu.PC, cpu.DT, cpu.ST, cpu.SP);
 
             match cpu.last_update.elapsed() {
                 Ok(duration) => {
@@ -109,6 +115,9 @@ impl CPU {
 
     pub fn read_file(&mut self, file: &mut File) {
         self.memory.borrow_mut().read_file(file);
+
+        self.display
+            .update_memory_debug(self.memory.borrow().get_memory(), false);
     }
 
     pub fn play_beep(&mut self) {
@@ -161,6 +170,9 @@ impl CPU {
                         self.SP -= 1;
                         let return_address = self.stack[self.SP as usize];
                         self.PC = return_address - 2;
+
+                        self.display
+                            .update_stack_debug(&self.stack[0..self.SP as usize]);
                     }
                     _ => {
                         // SYS addr
@@ -177,6 +189,9 @@ impl CPU {
                 self.stack[self.SP as usize] = self.PC + 2;
                 self.SP += 1;
                 self.PC = address - 2;
+
+                self.display
+                    .update_stack_debug(&self.stack[0..self.SP as usize]);
             }
             3 => {
                 // SE Vx, byte
@@ -376,6 +391,8 @@ impl CPU {
                         memory.store(self.I, value / 100);
                         memory.store(self.I + 1, (value % 100) / 10);
                         memory.store(self.I + 2, value % 10);
+
+                        self.display.update_memory_debug(memory.get_memory(), false);
                     }
                     0x55 => {
                         // LD [I], Vx
@@ -383,6 +400,9 @@ impl CPU {
                             self.memory.borrow_mut().store(self.I, self.V[i as usize]);
                             self.I += 1;
                         }
+
+                        self.display
+                            .update_memory_debug(self.memory.borrow().get_memory(), false);
                     }
                     0x65 => {
                         // LD Vx, [I]
