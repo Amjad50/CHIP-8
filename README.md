@@ -9,6 +9,7 @@ This emulator is full as the documentation, and that include:
 - 32x64 screen
 - Keyboard support
 - Sounds
+- Debugger (on the way).
 
 #### CPU
 
@@ -66,6 +67,23 @@ Some games and roms tried with this emulator
 
 #### Keypad tester
 ![Keypad Tester](screenshots/keypad.png)
+
+### Debugger
+On the process of making a debugger for this emulator/interpreter.
+
+#### TODO:
+- [x] Show registers
+- [x] Show stack
+- [x] Show memory
+- [ ] Show instructions
+- [ ] Show keypad
+- [ ] Allow user to stop the CPU in the middle
+- [ ] Allow user to edit registers
+- [ ] Allow user to edit memory
+- [ ] Show which registers have changed during the last
+  instruction (coloring or something).
+
+![Debugger](screenshots/debugger.png)
 
 
 Any suggestions and edits are welcomed in the issues and pull requests.
