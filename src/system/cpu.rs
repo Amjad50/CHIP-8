@@ -70,6 +70,8 @@ impl CPU {
                     }
                     None => {}
                 };
+                
+                return;
             }
 
             let instruction = (cpu.memory.borrow().get(cpu.PC) as u16) << 8
