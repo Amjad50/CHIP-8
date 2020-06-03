@@ -84,6 +84,9 @@ On the process of making a debugger for this emulator/interpreter.
   instruction (coloring or something).
 
 ![Debugger](screenshots/debugger.png)
+<br>
+<br>
+![Debugger 2](screenshots/debugger2.png)
 
 
 Any suggestions and edits are welcomed in the issues and pull requests.
