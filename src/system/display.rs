@@ -67,7 +67,6 @@ impl Display {
             .load_from_data(include_bytes!("../../style.css"))
             .expect("Failed to load CSS");
 
-
         gtk::StyleContext::add_provider_for_screen(
             &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
             &provider,
@@ -176,7 +175,7 @@ impl Display {
         let mut result: String = "".to_owned();
         // V registers
         for i in 0..V.len() {
-            result.push_str(&format!("V{:1x}: {:02x}    ", i, V[i]));
+            result.push_str(&format!("V{:1X}: {:02x}  ", i, V[i]));
             if i % 4 == 3 {
                 result.push('\n');
             }
@@ -215,11 +214,12 @@ impl Display {
 
         for &byte in bytes {
             let c = byte as char;
-            if c.is_ascii() && !c.is_control() {
-                result.push(c);
+
+            result.push(if c.is_ascii() && !c.is_control() {
+                c
             } else {
-                result.push_str(". "); //
-            }
+                '.'
+            });
         }
 
         result
