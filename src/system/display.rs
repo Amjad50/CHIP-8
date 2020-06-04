@@ -1,8 +1,9 @@
+use super::disassembler::Instruction;
 use gdk::enums::key;
 use gdk::keyval_to_upper;
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{Application, Builder, DrawingArea, Grid, ListStore, TextBuffer, Window};
+use gtk::{Application, Builder, DrawingArea, Grid, ListStore, TextBuffer, TreeView, Window};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -34,6 +35,8 @@ const KEYPAD_GRID_MAPPING: [u8; 16] = [13, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 14, 3
 pub struct Display {
     window: Rc<RefCell<Window>>,
     area: DrawingArea,
+    disassembly_list_store: ListStore,
+    disassembly_view: TreeView,
     registers_buffer: TextBuffer,
     stack_buffer: TextBuffer,
     memory_list_store: ListStore,
@@ -48,12 +51,25 @@ impl Display {
     fn build_layout(
         width: i32,
         height: i32,
-    ) -> (Window, DrawingArea, TextBuffer, TextBuffer, ListStore, Grid) {
+    ) -> (
+        Window,
+        DrawingArea,
+        ListStore,
+        TreeView,
+        TextBuffer,
+        TextBuffer,
+        ListStore,
+        Grid,
+    ) {
         let glade_src = include_str!("../../layout.glade");
 
         let builder = Builder::new_from_string(glade_src);
         let window: Window = builder.get_object("main_application_window").unwrap();
         let area: DrawingArea = builder.get_object("canvas").unwrap();
+
+        let disassembly_list_store: ListStore =
+            builder.get_object("disassemblyViewListStore").unwrap();
+        let disassembly_view: TreeView = builder.get_object("disassemblyView").unwrap();
 
         let registers_buffer: TextBuffer = builder.get_object("registersBuffer").unwrap();
         let stack_buffer: TextBuffer = builder.get_object("stackBuffer").unwrap();
@@ -80,6 +96,8 @@ impl Display {
         (
             window,
             area,
+            disassembly_list_store,
+            disassembly_view,
             registers_buffer,
             stack_buffer,
             memory_list_store,
@@ -96,15 +114,25 @@ impl Display {
             .expect("failed to initialize GTK application");
 
         // will be added to application before run
-        let (window, area, registers_buffer, stack_buffer, memory_list_store, keypad_grid) =
-            Display::build_layout(
-                (width * DEFAULT_PIXEL_SIZE) as i32,
-                (height * DEFAULT_PIXEL_SIZE) as i32,
-            );
+        let (
+            window,
+            area,
+            disassembly_list_store,
+            disassembly_view,
+            registers_buffer,
+            stack_buffer,
+            memory_list_store,
+            keypad_grid,
+        ) = Display::build_layout(
+            (width * DEFAULT_PIXEL_SIZE) as i32,
+            (height * DEFAULT_PIXEL_SIZE) as i32,
+        );
 
         let display = Display {
             window: Rc::new(RefCell::new(window)),
             area: area,
+            disassembly_list_store: disassembly_list_store,
+            disassembly_view: disassembly_view,
             registers_buffer: registers_buffer,
             stack_buffer: stack_buffer,
             memory_list_store: memory_list_store,
@@ -157,6 +185,38 @@ impl Display {
             }
             Inhibit(false)
         });
+    }
+
+    // FIXME: fix to support dynamic instructions building
+    pub fn update_current_instruction_debug(&self, address: u16) {
+        // because we disassemble everything
+        let index = (address / 2) as i32;
+        let iter = self
+            .disassembly_list_store
+            .iter_nth_child(None, index) // parent = None, meaning root children
+            .unwrap();
+        let path = self.disassembly_list_store.get_path(&iter).unwrap();
+
+        self.disassembly_view.get_selection().select_iter(&iter);
+        self.disassembly_view.scroll_to_cell::<gtk::TreeViewColumn>(
+            Some(&path),
+            None,
+            false, // ignore alignment
+            0.5, // align rows to half, but because it will jump to the center, even if it only scrolls one row, it has been disabled
+            0.,  // col_align is not used as this is a single list
+        );
+    }
+
+    pub fn update_disassembly_debug(&self, disassembly: &Vec<Instruction>) {
+        for instruction in disassembly {
+            let current_item = self.disassembly_list_store.append();
+
+            self.disassembly_list_store.set(
+                &current_item,
+                &[0, 1],
+                &[&format!("{:04X}", instruction.address), &instruction.opcode],
+            );
+        }
     }
 
     pub fn update_stack_debug(&self, stack: &[u16]) {

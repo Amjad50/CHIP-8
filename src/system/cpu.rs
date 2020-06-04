@@ -81,14 +81,6 @@ impl CPU {
         cpu_rc.borrow().display.run_in_loop(1000 / FPS, move || {
             let mut cpu = c_cpu.borrow_mut();
 
-            // if we are in stepping mode and can run the next instruction, run it
-            if *cpu.single_stepping.borrow() && !*cpu.run_next.borrow() {
-                return;
-            }
-
-            // if we are in stepping mode, pause for the next time until the user clicks the button
-            *cpu.run_next.borrow_mut() = false;
-
             // cpu waiting for key press
             if cpu.wait_for_keypress_x > -1 {
                 // get the keyboard press layout
@@ -100,6 +92,7 @@ impl CPU {
                         let x = cpu.wait_for_keypress_x as usize;
                         cpu.V[x] = key as u8;
                         cpu.wait_for_keypress_x = -1;
+                        cpu.display.update_current_instruction_debug(cpu.PC);
                     }
                     None => {}
                 };
@@ -107,10 +100,23 @@ impl CPU {
                 return;
             }
 
+
+            // if we are in stepping mode and can run the next instruction, run it
+            if *cpu.single_stepping.borrow() && !*cpu.run_next.borrow() {
+                return;
+            }
+
+            // if we are in stepping mode, pause for the next time until the user clicks the button
+            *cpu.run_next.borrow_mut() = false;
+
             let instruction = (cpu.memory.borrow().get(cpu.PC) as u16) << 8
                 | (cpu.memory.borrow().get(cpu.PC + 1) as u16);
             cpu.run_instruction(instruction);
             cpu.PC += 2;
+
+            if cpu.wait_for_keypress_x == -1 {
+                cpu.display.update_current_instruction_debug(cpu.PC);
+            }
 
             cpu.display
                 .update_registers_debug(&cpu.V, cpu.I, cpu.PC, cpu.DT, cpu.ST, cpu.SP);
@@ -145,6 +151,13 @@ impl CPU {
 
     pub fn read_file(&mut self, file: &mut File) {
         self.memory.borrow_mut().read_file(file);
+
+        self.display
+            .update_disassembly_debug(&super::disassembler::disassemble(
+                &self.memory.borrow().get_memory(),
+                0,
+            ));
+        self.display.update_current_instruction_debug(self.PC);
 
         self.display
             .update_memory_debug(self.memory.borrow().get_memory(), false);

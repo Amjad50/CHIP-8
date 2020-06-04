@@ -80,13 +80,16 @@ These can be changed in [cpu.rs::setup_keyboard](src/system/cpu.rs).
 - [x] Show registers
 - [x] Show stack
 - [x] Show memory
-- [ ] Show instructions
+- [x] Show instructions
 - [x] Show keypad
 - [x] Allow user to stop the CPU in the middle
 - [ ] Allow user to edit registers
 - [ ] Allow user to edit memory
 - [ ] Show which registers have changed during the last
   instruction (coloring or something).
+- [ ] Implement flow-oriented disassembly (Some roms, have instructions on odd addresses, like Space Invaders).
+- [ ] Breakpoints on instructions
+- [ ] Breakpoints on data
 
 ![Debugger](screenshots/debugger.png)
 <br>
