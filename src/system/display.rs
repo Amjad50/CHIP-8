@@ -2,7 +2,7 @@ use gdk::enums::key;
 use gdk::keyval_to_upper;
 use gio::prelude::*;
 use gtk::prelude::*;
-use gtk::{Application, Builder, DrawingArea, ListStore, TextBuffer, Window};
+use gtk::{Application, Builder, DrawingArea, Grid, ListStore, TextBuffer, Window};
 use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
@@ -29,12 +29,15 @@ const KEYBOARD_MAPPING: [u32; 16] = [
     key::V,
 ];
 
+const KEYPAD_GRID_MAPPING: [u8; 16] = [13, 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 14, 3, 7, 11, 15];
+
 pub struct Display {
     window: Rc<RefCell<Window>>,
     area: DrawingArea,
     registers_buffer: TextBuffer,
     stack_buffer: TextBuffer,
     memory_list_store: ListStore,
+    keypad_grid: Rc<RefCell<Grid>>,
     width: u16,
     height: u16,
     data: Rc<RefCell<Vec<bool>>>,
@@ -45,16 +48,31 @@ impl Display {
     fn build_layout(
         width: i32,
         height: i32,
-    ) -> (Window, DrawingArea, TextBuffer, TextBuffer, ListStore) {
+    ) -> (Window, DrawingArea, TextBuffer, TextBuffer, ListStore, Grid) {
         let glade_src = include_str!("../../layout.glade");
 
         let builder = Builder::new_from_string(glade_src);
         let window: Window = builder.get_object("main_application_window").unwrap();
         let area: DrawingArea = builder.get_object("canvas").unwrap();
 
-        let registers_buffer: gtk::TextBuffer = builder.get_object("registersBuffer").unwrap();
-        let stack_buffer: gtk::TextBuffer = builder.get_object("stackBuffer").unwrap();
-        let memory_list_store: gtk::ListStore = builder.get_object("memoryViewListStore").unwrap();
+        let registers_buffer: TextBuffer = builder.get_object("registersBuffer").unwrap();
+        let stack_buffer: TextBuffer = builder.get_object("stackBuffer").unwrap();
+        let memory_list_store: ListStore = builder.get_object("memoryViewListStore").unwrap();
+        let keypad_grid: Grid = builder.get_object("keypad").unwrap();
+
+        // assign CSS
+        let provider = gtk::CssProvider::new();
+
+        provider
+            .load_from_data(include_bytes!("../../style.css"))
+            .expect("Failed to load CSS");
+
+
+        gtk::StyleContext::add_provider_for_screen(
+            &gdk::Screen::get_default().expect("Error initializing gtk css provider."),
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
 
         area.set_size_request(width, height);
 
@@ -66,6 +84,7 @@ impl Display {
             registers_buffer,
             stack_buffer,
             memory_list_store,
+            keypad_grid,
         )
     }
 
@@ -78,7 +97,7 @@ impl Display {
             .expect("failed to initialize GTK application");
 
         // will be added to application before run
-        let (window, area, registers_buffer, stack_buffer, memory_list_store) =
+        let (window, area, registers_buffer, stack_buffer, memory_list_store, keypad_grid) =
             Display::build_layout(
                 (width * DEFAULT_PIXEL_SIZE) as i32,
                 (height * DEFAULT_PIXEL_SIZE) as i32,
@@ -90,6 +109,7 @@ impl Display {
             registers_buffer: registers_buffer,
             stack_buffer: stack_buffer,
             memory_list_store: memory_list_store,
+            keypad_grid: Rc::new(RefCell::new(keypad_grid)),
             width: width,
             height: height,
             data: Rc::new(RefCell::new(vec![false; (width * height) as usize])),
@@ -245,33 +265,59 @@ impl Display {
         );
     }
 
+    fn update_keyboard(keyval: u32, keyboard: &mut [bool; 16], value: bool) {
+        let keyval = keyval_to_upper(keyval);
+
+        match KEYBOARD_MAPPING.iter().position(|&x| x == keyval) {
+            Some(index) => {
+                keyboard[index] = value;
+            }
+            None => {}
+        };
+    }
+
+    fn update_keypad_debug(keypad_grid: &Grid, keyboard: &[bool; 16]) {
+        for (i, &value) in keyboard.iter().enumerate() {
+            let index = KEYPAD_GRID_MAPPING[i as usize];
+            let row = (index / 4) as i32;
+            let col = (index % 4) as i32;
+
+            let child = keypad_grid.get_child_at(col, row).unwrap();
+            let style_context = child.get_style_context();
+
+            if value {
+                style_context.add_class("pressed");
+            } else {
+                style_context.remove_class("pressed");
+            }
+        }
+    }
+
     pub fn setup_keyboard(&self) {
         let window = self.window.borrow();
+        // FIXME: is there a better way to do this?
         let keyboard_clone_press = self.keyboard.clone();
         let keyboard_clone_release = self.keyboard.clone();
+        let keypad_grid_clone_press = self.keypad_grid.clone();
+        let keypad_grid_clone_release = self.keypad_grid.clone();
 
-        // FIXME: full code duplication with below
         window.connect_key_press_event(move |_, event| {
             let mut keyboard = keyboard_clone_press.borrow_mut();
-            let keyval = keyval_to_upper(event.get_keyval());
-            match KEYBOARD_MAPPING.iter().position(|&x| x == keyval) {
-                Some(index) => {
-                    keyboard[index] = true;
-                }
-                None => {}
-            };
+            let keypad_grid = keypad_grid_clone_press.borrow();
+
+            Display::update_keyboard(event.get_keyval(), &mut *keyboard, true);
+            Display::update_keypad_debug(&*keypad_grid, &keyboard);
+
             Inhibit(false)
         });
 
         window.connect_key_release_event(move |_, event| {
             let mut keyboard = keyboard_clone_release.borrow_mut();
-            let keyval = keyval_to_upper(event.get_keyval());
-            match KEYBOARD_MAPPING.iter().position(|&x| x == keyval) {
-                Some(index) => {
-                    keyboard[index] = false;
-                }
-                None => {}
-            };
+            let keypad_grid = keypad_grid_clone_release.borrow();
+
+            Display::update_keyboard(event.get_keyval(), &mut *keyboard, false);
+            Display::update_keypad_debug(&*keypad_grid, &keyboard);
+
             Inhibit(false)
         });
     }
