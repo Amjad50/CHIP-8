@@ -161,7 +161,7 @@ impl Display {
 
     pub fn update_stack_debug(&self, stack: &[u16]) {
         let result = stack
-            .iter() // iterater over the stack
+            .iter() // iterate over the stack
             .rev() // in the reverse order
             .map(|x| format!("{:04x}", x)) // convert it to a string representation
             .collect::<Vec<String>>()
@@ -293,7 +293,10 @@ impl Display {
         }
     }
 
-    pub fn setup_keyboard(&self) {
+    pub fn setup_keyboard<F: 'static>(&self, press_handler: F)
+    where
+        F: Fn(u32) -> (),
+    {
         let window = self.window.borrow();
         // FIXME: is there a better way to do this?
         let keyboard_clone_press = self.keyboard.clone();
@@ -307,6 +310,8 @@ impl Display {
 
             Display::update_keyboard(event.get_keyval(), &mut *keyboard, true);
             Display::update_keypad_debug(&*keypad_grid, &keyboard);
+
+            press_handler(event.get_keyval());
 
             Inhibit(false)
         });

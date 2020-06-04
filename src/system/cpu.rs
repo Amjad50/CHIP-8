@@ -1,6 +1,7 @@
 use super::display::Display;
 use super::memory::Memory;
 use super::sound::Sound;
+use gdk::enums::key;
 use rand; // used for the RND instruction only.
 use std::cell::RefCell;
 use std::fs::File;
@@ -17,10 +18,13 @@ pub struct CPU {
     stack: [u16; 16],        // Internal stack of 16 16-bit values
     memory: RefCell<Memory>, // Memory component
     display: Display,        // Display component
-    beep_sound: Sound,
+    beep_sound: Sound,       // The beep sound that should be played when counting down ST
+
+    single_stepping: Rc<RefCell<bool>>, // Is debugging single step enabled?
+    run_next: Rc<RefCell<bool>>, // can we run run the next instruction in the next loop? (only in single_stepping)
 
     wait_for_keypress_x: i8, // used to indicate the waiting for keypress for instruction Fx0A - LD Vx, K
-    last_update: SystemTime,
+    last_update: SystemTime, // time of the last event loop (used to get 60Hz clock for the timers)
 }
 
 impl CPU {
@@ -36,6 +40,10 @@ impl CPU {
             memory: RefCell::new(Memory::new()),
             display: Display::new(64, 32),
             wait_for_keypress_x: -1,
+
+            single_stepping: Rc::new(RefCell::new(false)),
+            run_next: Rc::new(RefCell::new(false)),
+
             last_update: SystemTime::now(),
             beep_sound: Sound::new(300), // frequency of the sin wave
         };
@@ -47,7 +55,21 @@ impl CPU {
     }
 
     pub fn setup_keyboard(&self) {
-        self.display.setup_keyboard();
+        let single_stepping_c = self.single_stepping.clone();
+        let run_next_c = self.run_next.clone();
+
+        self.display.setup_keyboard(move |k| {
+            let mut single_stepping = single_stepping_c.borrow_mut();
+            let mut run_next = run_next_c.borrow_mut();
+            // Toggle debug with SPACE
+            // Step with N
+            if k == key::space {
+                *single_stepping = !*single_stepping;
+            }
+            if k == key::n {
+                *run_next = true;
+            }
+        });
     }
 
     pub fn run_display_application(self) {
@@ -58,6 +80,14 @@ impl CPU {
 
         cpu_rc.borrow().display.run_in_loop(1000 / FPS, move || {
             let mut cpu = c_cpu.borrow_mut();
+
+            // if we are in stepping mode and can run the next instruction, run it
+            if *cpu.single_stepping.borrow() && !*cpu.run_next.borrow() {
+                return;
+            }
+
+            // if we are in stepping mode, pause for the next time until the user clicks the button
+            *cpu.run_next.borrow_mut() = false;
 
             // cpu waiting for key press
             if cpu.wait_for_keypress_x > -1 {
