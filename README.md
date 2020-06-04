@@ -71,13 +71,18 @@ Some games and roms tried with this emulator
 ### Debugger
 On the process of making a debugger for this emulator/interpreter.
 
+The user can pause the CPU with the `<SPACE>` key, and unpause with the same key.
+And during debug, users can use the `<N>` key to advance one instruction at a time. (can be held).
+
+These can be changed in [cpu.rs::setup_keyboard](src/system/cpu.rs).
+
 #### TODO:
 - [x] Show registers
 - [x] Show stack
 - [x] Show memory
 - [ ] Show instructions
-- [ ] Show keypad
-- [ ] Allow user to stop the CPU in the middle
+- [x] Show keypad
+- [x] Allow user to stop the CPU in the middle
 - [ ] Allow user to edit registers
 - [ ] Allow user to edit memory
 - [ ] Show which registers have changed during the last
