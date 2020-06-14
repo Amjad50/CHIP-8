@@ -37,6 +37,7 @@ pub struct Display {
     area: DrawingArea,
     disassembly_list_store: ListStore,
     disassembly_view: TreeView,
+    disassembly_start_offset: u16,
     registers_buffer: TextBuffer,
     stack_buffer: TextBuffer,
     memory_list_store: ListStore,
@@ -133,6 +134,7 @@ impl Display {
             area: area,
             disassembly_list_store: disassembly_list_store,
             disassembly_view: disassembly_view,
+            disassembly_start_offset: 0,
             registers_buffer: registers_buffer,
             stack_buffer: stack_buffer,
             memory_list_store: memory_list_store,
@@ -207,7 +209,12 @@ impl Display {
         );
     }
 
-    pub fn update_disassembly_debug(&self, disassembly: &Vec<Instruction>) {
+    pub fn update_disassembly_debug(&mut self, disassembly: &Vec<Instruction>) {
+        self.disassembly_list_store.clear();
+        if disassembly.len() > 0 {
+            self.disassembly_start_offset = disassembly[0].address;
+        }
+
         for instruction in disassembly {
             let current_item = self.disassembly_list_store.append();
 
@@ -428,6 +435,10 @@ impl Display {
             x[i] = xx;
         }
         x
+    }
+
+    pub fn get_disassembly_offset(&self) -> u16 {
+        self.disassembly_start_offset
     }
 
     pub fn draw_pixel(&mut self, x: u16, y: u16, value: bool) {

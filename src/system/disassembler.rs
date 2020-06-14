@@ -203,8 +203,11 @@ pub fn disassemble(instructions: &[u8], offset: u16) -> Vec<Instruction> {
     let mut result = Vec::<Instruction>::with_capacity(instructions.len() / 2);
 
     for i in (0..instructions.len()).step_by(2) {
-        let instruction = ((instructions[i] as u16) << 8) | (instructions[i + 1] as u16);
-
+        let instruction = if i + 1 >= instructions.len() {
+            (instructions[i] as u16) << 8
+        } else {
+            ((instructions[i] as u16) << 8) | (instructions[i + 1] as u16)
+        };
         result.push(Instruction {
             address: i as u16 + offset,
             bytes: instruction,

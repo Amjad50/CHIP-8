@@ -100,7 +100,6 @@ impl CPU {
                 return;
             }
 
-
             // if we are in stepping mode and can run the next instruction, run it
             if *cpu.single_stepping.borrow() && !*cpu.run_next.borrow() {
                 return;
@@ -114,7 +113,15 @@ impl CPU {
             cpu.run_instruction(instruction);
             cpu.PC += 2;
 
-            if cpu.wait_for_keypress_x == -1 {
+            // only show the location of the instruction in single stepping mode
+            if *cpu.single_stepping.borrow() && cpu.wait_for_keypress_x == -1 {
+                if cpu.display.get_disassembly_offset() % 2 == 1 && cpu.PC % 2 == 0 {
+                    // update even
+                    cpu.update_disassembly_debug_even();
+                } else if cpu.display.get_disassembly_offset() % 2 == 0 && cpu.PC % 2 == 1 {
+                    // update odd
+                    cpu.update_disassembly_debug_odd();
+                }
                 cpu.display.update_current_instruction_debug(cpu.PC);
             }
 
@@ -149,14 +156,28 @@ impl CPU {
         Display::run_application();
     }
 
-    pub fn read_file(&mut self, file: &mut File) {
-        self.memory.borrow_mut().read_file(file);
-
+    fn update_disassembly_debug_even(&mut self) {
         self.display
             .update_disassembly_debug(&super::disassembler::disassemble(
                 &self.memory.borrow().get_memory(),
                 0,
             ));
+    }
+
+    fn update_disassembly_debug_odd(&mut self) {
+        let offset: u16 = 1;
+        self.display
+            .update_disassembly_debug(&super::disassembler::disassemble(
+                &self.memory.borrow().get_memory()[(offset as usize)..],
+                offset,
+            ));
+    }
+
+    pub fn read_file(&mut self, file: &mut File) {
+        self.memory.borrow_mut().read_file(file);
+
+        // default is even
+        self.update_disassembly_debug_even();
         self.display.update_current_instruction_debug(self.PC);
 
         self.display
