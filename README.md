@@ -1,4 +1,5 @@
 # CHIP-8
+[![Build status](https://api.cirrus-ci.com/github/Amjad50/CHIP-8.svg)](https://cirrus-ci.com/github/Amjad50/CHIP-8/master)
 
 This is an interpreter implementation for [CHIP-8][chip8-wiki] by me as a fun side project, and to get beginning with building emulators and other fun stuff.
 
